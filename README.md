@@ -73,10 +73,10 @@ DictateDemoApp (SwiftUI @main)
     └── Always-on: VAD timer → wake word detection → auto-paste
 ```
 
-## Author
+## Acknowledgments
 
-Trevor
+Derived from the DictateDemo example in [speech-swift](https://github.com/soniqo/speech-swift) by soniqo.
 
 ## License
 
-MIT
+Apache 2.0 — see [LICENSE](LICENSE).
