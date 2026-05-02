@@ -1,8 +1,16 @@
+import ServiceManagement
 import SwiftUI
 
 @main
 struct DictateDemoApp: App {
     @StateObject private var viewModel = DictateViewModel()
+
+    init() {
+        if !UserDefaults.standard.bool(forKey: "loginItemRegistered") {
+            try? SMAppService.mainApp.register()
+            UserDefaults.standard.set(true, forKey: "loginItemRegistered")
+        }
+    }
 
     var body: some Scene {
         MenuBarExtra {

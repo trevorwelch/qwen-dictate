@@ -73,6 +73,6 @@ struct DictateHUDView: View {
     private var statusText: String {
         if viewModel.isTranscribing { return "Transcribing..." }
         if viewModel.isRecording { return "Recording..." }
-        return "Ready"
+        return viewModel.statusMessage
     }
 }

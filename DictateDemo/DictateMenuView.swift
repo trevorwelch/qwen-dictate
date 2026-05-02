@@ -36,6 +36,11 @@ struct DictateMenuView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal)
+                } else if viewModel.statusMessage != "Ready" {
+                    Text(viewModel.statusMessage)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal)
                 }
 
                 Toggle(isOn: Binding(

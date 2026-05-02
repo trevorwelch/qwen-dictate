@@ -2,6 +2,7 @@ import XCTest
 @testable import DictateDemo
 
 final class DictateDemoTests: XCTestCase {
+    @MainActor
     func testStripWakeWordMatches() {
         let cases: [(String, Bool, String)] = [
             ("Hey Claude, remind me to buy milk", true, "remind me to buy milk"),

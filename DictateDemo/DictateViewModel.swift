@@ -1,4 +1,5 @@
 import AppKit
+import ApplicationServices
 import Foundation
 @preconcurrency import Qwen3ASR
 @preconcurrency import SpeechVAD
@@ -12,6 +13,7 @@ final class DictateViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var loadingStatus = ""
     @Published var errorMessage: String?
+    @Published var statusMessage = "Ready"
     @Published var alwaysListening = false
     @Published var isSpeechActive = false
 
@@ -96,6 +98,7 @@ final class DictateViewModel: ObservableObject {
         guard modelLoaded, !isTranscribing else { return }
         captureTargetApp()
         errorMessage = nil
+        statusMessage = "Recording..."
         partialText = ""
         audioBuffer.removeAll()
 
@@ -122,15 +125,23 @@ final class DictateViewModel: ObservableObject {
             recorder.stop()
         }
 
+        DispatchQueue.main.async { [weak self] in
+            self?.transcribeRecordedAudio()
+        }
+    }
+
+    private func transcribeRecordedAudio() {
         let audio = audioBuffer
         audioBuffer.removeAll()
 
         guard !audio.isEmpty else {
+            statusMessage = "No audio captured"
             if alwaysListening { resumeAlwaysOn() }
             return
         }
 
         isTranscribing = true
+        statusMessage = "Transcribing..."
         let model = asrModel!
         let vad = vad!
 
@@ -148,6 +159,7 @@ final class DictateViewModel: ObservableObject {
             guard maxProb >= 0.3 else {
                 DispatchQueue.main.async {
                     self?.isTranscribing = false
+                    self?.statusMessage = "No speech detected"
                     if self?.alwaysListening == true { self?.resumeAlwaysOn() }
                 }
                 return
@@ -165,8 +177,13 @@ final class DictateViewModel: ObservableObject {
                 if !text.isEmpty {
                     self.sentences.append(text)
                     if UserDefaults.standard.bool(forKey: "autoInject") {
-                        self.pasteToFrontApp()
+                        self.statusMessage = "Pasting..."
+                        self.pasteToFrontApp(text: text)
+                    } else {
+                        self.statusMessage = "Transcribed"
                     }
+                } else {
+                    self.statusMessage = "Empty transcription"
                 }
                 if self.alwaysListening { self.resumeAlwaysOn() }
             }
@@ -321,7 +338,7 @@ final class DictateViewModel: ObservableObject {
             if matched && !remainder.isEmpty {
                 self.sentences.append(remainder)
                 if UserDefaults.standard.bool(forKey: "autoInject") {
-                    self.pasteToFrontApp()
+                    self.pasteToFrontApp(text: remainder)
                 }
             } else if !matched && !text.isEmpty {
                 self.partialText = "Heard: \(text)"
@@ -333,7 +350,7 @@ final class DictateViewModel: ObservableObject {
         }
     }
 
-    static func stripWakeWord(_ text: String) -> (matched: Bool, remainder: String) {
+    nonisolated static func stripWakeWord(_ text: String) -> (matched: Bool, remainder: String) {
         // Match "hey claude" and common misrecognitions
         let pattern = #"^[Hh]ey[,.\s]+[Cc]lau?de?[,.\s]*|^[Hh]ey[,.\s]+[Cc]loud[,.\s]*"#
         guard let range = text.range(of: pattern, options: .regularExpression) else {
@@ -353,39 +370,136 @@ final class DictateViewModel: ObservableObject {
         }
     }
 
-    func pasteToFrontApp() {
-        guard !fullText.isEmpty else { return }
-        let saved = NSPasteboard.general.string(forType: .string)
+    func pasteToFrontApp(text: String? = nil) {
+        let textToPaste = text ?? fullText
+        guard !textToPaste.isEmpty else { return }
 
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(fullText, forType: .string)
+        NSPasteboard.general.setString(textToPaste, forType: .string)
+        statusMessage = "Text copied; sending paste"
 
-        // Activate the target app if our popover has focus
-        if let target = targetApp,
-           NSWorkspace.shared.frontmostApplication?.bundleIdentifier == Bundle.main.bundleIdentifier {
-            target.activate()
+        if let target = targetApp {
+            target.activate(options: [.activateIgnoringOtherApps])
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+            if self.targetAppIsTerminalLike(), self.typeTextWithUnicodeEvents(textToPaste) {
+                self.statusMessage = "Typed text"
+            } else if self.insertTextWithAccessibility(textToPaste) {
+                self.statusMessage = "Inserted text"
+            } else if self.postSystemEventsPaste() {
+                self.statusMessage = "Paste sent"
+            } else {
+                self.postEventTapPaste()
+                self.statusMessage = "Paste sent via fallback"
+            }
+        }
+    }
+
+    private func targetAppIsTerminalLike() -> Bool {
+        guard let targetApp else { return false }
+        let bundleId = targetApp.bundleIdentifier?.lowercased() ?? ""
+        let appName = targetApp.localizedName?.lowercased() ?? ""
+        return bundleId.contains("ghostty")
+            || bundleId.contains("terminal")
+            || bundleId.contains("iterm")
+            || bundleId.contains("messages")
+            || bundleId == "com.apple.MobileSMS".lowercased()
+            || appName.contains("ghostty")
+            || appName.contains("terminal")
+            || appName.contains("iterm")
+            || appName.contains("messages")
+    }
+
+    private func typeTextWithUnicodeEvents(_ text: String) -> Bool {
+        guard !text.isEmpty else { return false }
+        let source = CGEventSource(stateID: .hidSystemState)
+
+        for character in text {
+            let units = Array(String(character).utf16)
+            units.withUnsafeBufferPointer { buffer in
+                guard let baseAddress = buffer.baseAddress else { return }
+                let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true)
+                keyDown?.keyboardSetUnicodeString(stringLength: buffer.count, unicodeString: baseAddress)
+                keyDown?.post(tap: .cghidEventTap)
+
+                let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false)
+                keyUp?.keyboardSetUnicodeString(stringLength: buffer.count, unicodeString: baseAddress)
+                keyUp?.post(tap: .cghidEventTap)
+            }
+        }
+
+        return true
+    }
+
+    private func insertTextWithAccessibility(_ text: String) -> Bool {
+        let systemWide = AXUIElementCreateSystemWide()
+        var focusedValue: CFTypeRef?
+        let focusedResult = AXUIElementCopyAttributeValue(
+            systemWide,
+            kAXFocusedUIElementAttribute as CFString,
+            &focusedValue
+        )
+        guard focusedResult == .success,
+              let focused = focusedValue,
+              CFGetTypeID(focused) == AXUIElementGetTypeID()
+        else {
+            return false
+        }
+
+        let focusedElement = unsafeBitCast(focused, to: AXUIElement.self)
+        let selectedResult = AXUIElementSetAttributeValue(
+            focusedElement,
+            kAXSelectedTextAttribute as CFString,
+            text as CFTypeRef
+        )
+        if selectedResult == .success { return true }
+
+        var value: CFTypeRef?
+        let valueResult = AXUIElementCopyAttributeValue(
+            focusedElement,
+            kAXValueAttribute as CFString,
+            &value
+        )
+        guard valueResult == .success, value is String else {
+            return false
+        }
+
+        return AXUIElementSetAttributeValue(
+            focusedElement,
+            kAXValueAttribute as CFString,
+            text as CFTypeRef
+        ) == .success
+    }
+
+    private func postSystemEventsPaste() -> Bool {
+        let source = """
+        tell application "System Events"
+            keystroke "v" using command down
+        end tell
+        """
+        var error: NSDictionary?
+        NSAppleScript(source: source)?.executeAndReturnError(&error)
+        return error == nil
+    }
+
+    private func postEventTapPaste() {
+        for tap in [CGEventTapLocation.cghidEventTap, .cgSessionEventTap] {
             let src = CGEventSource(stateID: .hidSystemState)
             let kd = CGEvent(keyboardEventSource: src, virtualKey: 0x09, keyDown: true)
             kd?.flags = .maskCommand
             let ku = CGEvent(keyboardEventSource: src, virtualKey: 0x09, keyDown: false)
             ku?.flags = .maskCommand
-            kd?.post(tap: .cghidEventTap)
-            ku?.post(tap: .cghidEventTap)
-
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                NSPasteboard.general.clearContents()
-                if let saved { NSPasteboard.general.setString(saved, forType: .string) }
-            }
+            kd?.post(tap: tap)
+            ku?.post(tap: tap)
         }
     }
 
     func copyToClipboard() {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(fullText, forType: .string)
+        statusMessage = "Copied"
     }
 
-    func clearText() { sentences.removeAll(); partialText = "" }
+    func clearText() { sentences.removeAll(); partialText = ""; statusMessage = "Ready" }
 }
