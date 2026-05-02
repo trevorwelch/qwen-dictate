@@ -12,11 +12,8 @@ struct PreferencesView: View {
                 Toggle("Launch at login", isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, newValue in
                         do {
-                            if newValue {
-                                try SMAppService.mainApp.register()
-                            } else {
-                                try SMAppService.mainApp.unregister()
-                            }
+                            if newValue { try SMAppService.mainApp.register() }
+                            else { try SMAppService.mainApp.unregister() }
                         } catch {
                             launchAtLogin = SMAppService.mainApp.status == .enabled
                         }
@@ -24,7 +21,7 @@ struct PreferencesView: View {
             }
 
             Section("Hotkey") {
-                Text("Double-tap Right Option to start. Tap Right Option again to stop and paste.")
+                Text("Double-tap Right Option to start. Tap again to stop and paste.")
                     .foregroundStyle(.secondary)
             }
 

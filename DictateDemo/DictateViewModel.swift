@@ -24,7 +24,7 @@ final class DictateViewModel: ObservableObject {
     private let inferenceQueue = DispatchQueue(label: "dictate.inference")
     private let hotkeyManager = HotkeyManager()
 
-    // Always-on VAD state (accessed only on inferenceQueue)
+    // Always-on VAD state
     private var speechActive = false
     private var silenceChunkCount = 0
     private var speechBuffer: [Float] = []
@@ -131,6 +131,7 @@ final class DictateViewModel: ObservableObject {
     }
 
     private func transcribeRecordedAudio() {
+        // Copy and clear buffer on main queue to avoid race with audio recording
         let audio = audioBuffer
         audioBuffer.removeAll()
 
@@ -231,9 +232,7 @@ final class DictateViewModel: ObservableObject {
 
     private func routeAudioChunk(_ chunk: [Float]) {
         if isRecording {
-            DispatchQueue.main.async { [weak self] in
-                self?.audioBuffer.append(contentsOf: chunk)
-            }
+            audioBuffer.append(contentsOf: chunk)
         } else if alwaysListening {
             chunkLock.lock()
             pendingChunks.append(contentsOf: chunk)
@@ -379,7 +378,7 @@ final class DictateViewModel: ObservableObject {
         statusMessage = "Text copied; sending paste"
 
         if let target = targetApp {
-            target.activate(options: [.activateIgnoringOtherApps])
+            target.activate(options: [])
         }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {

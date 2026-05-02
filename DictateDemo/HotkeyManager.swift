@@ -12,7 +12,6 @@ final class HotkeyManager {
     private var lastTapTime: TimeInterval = 0
     private var isActive = false
     private var rightOptionIsDown = false
-    private var ignoreReleaseAfterStart = false
     private var stopOnRelease = false
 
     func setup() {
@@ -26,8 +25,8 @@ final class HotkeyManager {
     }
 
     func teardown() {
-        if let globalMonitor { NSEvent.removeMonitor(globalMonitor) }
-        if let localMonitor { NSEvent.removeMonitor(localMonitor) }
+        globalMonitor.map(NSEvent.removeMonitor)
+        localMonitor.map(NSEvent.removeMonitor)
         globalMonitor = nil
         localMonitor = nil
     }
@@ -39,30 +38,34 @@ final class HotkeyManager {
         guard isDown != rightOptionIsDown else { return }
         rightOptionIsDown = isDown
 
-        if !isDown {
-            if ignoreReleaseAfterStart {
-                ignoreReleaseAfterStart = false
-            } else if stopOnRelease {
-                stopOnRelease = false
-                isActive = false
-                onRecordStop?()
-            }
+        if isDown {
+            handleOptionPress()
+        } else {
+            handleOptionRelease()
+        }
+    }
+
+    private func handleOptionPress() {
+        if isActive {
+            stopOnRelease = true
             return
         }
 
-        if isActive {
-            stopOnRelease = true
+        let now = ProcessInfo.processInfo.systemUptime
+        if now - lastTapTime < doubleTapInterval {
+            isActive = true
+            lastTapTime = 0
+            onRecordStart?()
         } else {
-            let now = ProcessInfo.processInfo.systemUptime
-            if now - lastTapTime < doubleTapInterval {
-                isActive = true
-                ignoreReleaseAfterStart = true
-                lastTapTime = 0
-                onRecordStart?()
-            } else {
-                lastTapTime = now
-            }
+            lastTapTime = now
         }
+    }
+
+    private func handleOptionRelease() {
+        guard stopOnRelease else { return }
+        stopOnRelease = false
+        isActive = false
+        onRecordStop?()
     }
 
     deinit { teardown() }

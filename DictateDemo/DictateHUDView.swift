@@ -5,14 +5,9 @@ struct DictateHUDView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // Header
             HStack {
-                Circle()
-                    .fill(statusColor)
-                    .frame(width: 8, height: 8)
-                Text(statusText)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                Circle().fill(statusColor).frame(width: 8, height: 8)
+                Text(statusText).font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 if viewModel.isRecording {
                     Text("\(viewModel.wordCount) words")
@@ -21,7 +16,6 @@ struct DictateHUDView: View {
                 }
             }
 
-            // Transcript
             if viewModel.sentences.isEmpty && viewModel.partialText.isEmpty {
                 Text("Speak to transcribe...")
                     .foregroundStyle(.tertiary)
@@ -47,14 +41,10 @@ struct DictateHUDView: View {
                     }
                     .frame(maxHeight: 250)
                     .onChange(of: viewModel.sentences.count) {
-                        withAnimation {
-                            proxy.scrollTo(viewModel.sentences.count - 1, anchor: .bottom)
-                        }
+                        withAnimation { proxy.scrollTo(viewModel.sentences.count - 1, anchor: .bottom) }
                     }
                     .onChange(of: viewModel.partialText) {
-                        withAnimation {
-                            proxy.scrollTo("partial", anchor: .bottom)
-                        }
+                        withAnimation { proxy.scrollTo("partial", anchor: .bottom) }
                     }
                 }
             }
