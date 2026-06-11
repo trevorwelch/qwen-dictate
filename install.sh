@@ -141,5 +141,5 @@ fi
 echo ""
 echo "If this is a fresh install, grant these permissions in System Settings → Privacy:"
 echo "  • Accessibility"
-echo "  • Input Monitoring"
 echo "  • Microphone"
+echo "Also approve the Automation (System Events) prompt on first paste."

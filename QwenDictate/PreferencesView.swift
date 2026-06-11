@@ -26,13 +26,10 @@ struct PreferencesView: View {
             }
 
             Section("Permissions") {
-                Text("This app requires Accessibility and Input Monitoring permissions.")
+                Text("This app requires Accessibility and Microphone permissions, plus Automation approval for pasting.")
                     .foregroundStyle(.secondary)
                 Button("Open Accessibility Settings") {
                     NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
-                }
-                Button("Open Input Monitoring Settings") {
-                    NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent")!)
                 }
             }
         }

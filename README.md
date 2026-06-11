@@ -42,8 +42,8 @@ On first launch, macOS will ask for permissions. Grant:
 | Permission | Why QwenDictate Needs It |
 |---|---|
 | Microphone | Records your voice |
-| Accessibility | Pastes transcribed text into other apps |
-| Input Monitoring | Watches for the Right Option hotkey |
+| Accessibility | Watches for the Right Option hotkey and inserts text |
+| Automation (System Events) | Pastes transcribed text into the active app |
 
 Open System Settings > Privacy & Security if macOS does not show the prompts.
 
@@ -166,8 +166,8 @@ Then rerun:
 Open System Settings > Privacy & Security, then check:
 
 - Accessibility includes QwenDictate and is enabled.
-- Input Monitoring includes QwenDictate and is enabled.
 - Microphone includes QwenDictate and is enabled.
+- Automation lists QwenDictate with System Events enabled.
 
 If permissions look stale after reinstalling, remove QwenDictate from those
 lists, launch it again, and grant permissions again.
